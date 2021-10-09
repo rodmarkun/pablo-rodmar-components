@@ -1,0 +1,10 @@
+import "DifferentialRobot.idsl";
+
+Component keyboard_controller
+{
+    Communications
+    {
+        requires DifferentialRobot;
+    };
+    language Cpp;
+};
