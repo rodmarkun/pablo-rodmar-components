@@ -1,0 +1,12 @@
+import "Laser.idsl";
+import "DifferentialRobot.idsl";
+
+Component obstacle_avoiding
+{
+    Communications
+    {
+        requires DifferentialRobot, Laser;
+    };
+    language Cpp;
+};
+
