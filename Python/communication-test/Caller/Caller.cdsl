@@ -1,0 +1,11 @@
+import "Speech.idsl";
+
+Component Caller
+{
+    Communications
+    {
+        implements Speech;
+    };
+    language python;
+};
+
