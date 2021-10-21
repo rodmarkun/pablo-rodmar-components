@@ -36,28 +36,24 @@ SpecificWorker::~SpecificWorker()
 
 bool SpecificWorker::setParams(RoboCompCommonBehavior::ParameterList params)
 {
-//	THE FOLLOWING IS JUST AN EXAMPLE
-//	To use innerModelPath parameter you should uncomment specificmonitor.cpp readConfig method content
-//	try
-//	{
-//		RoboCompCommonBehavior::Parameter par = params.at("InnerModelPath");
-//		std::string innermodel_path = par.value;
-//		innerModel = std::make_shared(innermodel_path);
-//	}
-//	catch(const std::exception &e) { qFatal("Error reading config params"); }
-
-
-
-
-
-
-	return true;
+    return true;
 }
 
 void SpecificWorker::initialize(int period)
 {
 	std::cout << "Initialize worker" << std::endl;
-	this->Period = period;
+
+    QRectF dimensions(-5000,-2500,10000, 5000);
+    viewer = new AbstractGraphicViewer(this, dimensions);
+
+    this->resize(900,450);
+    robot_polygon = viewer->add_robot(ROBOT_LENGTH);
+    laser_in_robot_polygon = new QGraphicsRectItem(-10, 10, 20, 20, robot_polygon);
+    laser_in_robot_polygon->setPos(0, 190);     // move this to abstract
+
+    connect(viewer, &AbstractGraphicViewer::new_mouse_coordinates, this, &SpecificWorker::new_target_slot);
+
+	this->Period = 100;
 	if(this->startup_check_flag)
 	{
 		this->startup_check();
@@ -69,50 +65,54 @@ void SpecificWorker::initialize(int period)
 
 }
 
-void SpecificWorker::compute()
-{
-	const float threshold = 200;
-    float rot = 1.5707;	
+void SpecificWorker::compute() {
+    const float threshold = 600;
+    float rot = 0.8;
+    float limit;
 
     try
     {
-        RoboCompLaser::TLaserData ldata = laser_proxy->getLaserData();
-        std::sort( ldata.begin(), ldata.end(), [](RoboCompLaser::TData a, RoboCompLaser::TData b){ return     a.dist < b.dist; }) ;
-        
-	
-	 if( ldata.front().dist < threshold)
-	{
-		differentialrobot_proxy->setSpeedBase(5, rot);
-		usleep(1250000);
-		std::cout << ldata.front().dist << std::endl;	
-		differentialrobot_proxy->setSpeedBase(200, 0);
-		usleep(500000);
-		rot = rot + 0.12;
-		if( rot > 3 * 1.5707 )
-		{
-			rot = 1.5707;
-		}
-	}
-	
-	else
-	{
-		differentialrobot_proxy->setSpeedBase(200, 0); 
-		usleep(500000);
-		std::cout << ldata.front().dist << std::endl;
-  	}
-       	
+        RoboCompGenericBase::TBaseState bState;
+        differentialrobot_proxy->getBaseState(bState);
+        robot_polygon->setRotation(bState.alpha * 180 / M_PI);
+        robot_polygon->setPos(bState.x, bState.z);
     }
-    catch(const Ice::Exception &ex)
+    catch (const Ice::Exception &ex) { std::cout << ex << std::endl; }
+
+    try
     {
-        std::cout << ex << std::endl;
+          RoboCompLaser::TLaserData ldata = laser_proxy->getLaserData();
+    }
+    catch (const Ice::Exception &ex) { std::cout << ex << std::endl; }
+
+    if(target.active)
+    {
+        // convertir el punto al sistema de referencia del robot -> pr
+        // beta = atan2(pr.y, pr.x)
+        // distacia al targe: módulo de pr
+
+        // if dist < 100  entonces adv = 0 beta = 0  AND target.active false; return
+
+        // differential_robot->setSpeedBase(adv, beta);
     }
 }
+
+/////////////////////////////////////////////////////////////////////////
+
+
 
 int SpecificWorker::startup_check()
 {
 	std::cout << "Startup check" << std::endl;
 	QTimer::singleShot(200, qApp, SLOT(quit()));
 	return 0;
+}
+
+void SpecificWorker::new_target_slot(QPointF p)
+{
+    qInfo() << p;
+    target.pos = p;
+    target.active = true;
 }
 
 
@@ -144,3 +144,33 @@ int SpecificWorker::startup_check()
 // RoboCompLaser::LaserConfData
 // RoboCompLaser::TData
 
+
+
+
+//    try
+//    {
+//        RoboCompLaser::TLaserData ldata = laser_proxy->getLaserData();
+//        limit = ldata.size()/3;
+//        ldata.erase(ldata.begin(), ldata.begin()+limit);
+//        ldata.erase(ldata.end()-limit, ldata.end());
+//        std::sort( ldata.begin(), ldata.end(), [](RoboCompLaser::TData a, RoboCompLaser::TData b){ return     a.dist < b.dist; }) ;
+//
+//	    if( ldata.front().dist < threshold)
+//	    {
+//            differentialrobot_proxy->setSpeedBase(0, rot);
+//            usleep(1250000);
+//            std::cout << ldata.front().dist << std::endl;
+//            differentialrobot_proxy->setSpeedBase(300, 0);
+//            usleep(500000);
+//	    }
+//        else
+//        {
+//            differentialrobot_proxy->setSpeedBase(300, 0);
+//            usleep(500000);
+//            std::cout << ldata.front().dist << std::endl;
+//        }
+//    }
+//    catch(const Ice::Exception &ex)
+//    {
+//        std::cout << ex << std::endl;
+//    }

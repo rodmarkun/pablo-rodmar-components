@@ -20,7 +20,7 @@
 /**
 * \brief Default constructor
 */
-GenericWorker::GenericWorker(MapPrx& mprx) : QObject()
+GenericWorker::GenericWorker(MapPrx& mprx) : Ui_guiDlg()
 {
 
 	differentialrobot_proxy = (*(RoboCompDifferentialRobot::DifferentialRobotPrx*)mprx["DifferentialRobotProxy"]);
@@ -28,6 +28,11 @@ GenericWorker::GenericWorker(MapPrx& mprx) : QObject()
 
 	mutex = new QMutex(QMutex::Recursive);
 
+
+	#ifdef USE_QTGUI
+		setupUi(this);
+		show();
+	#endif
 	Period = BASIC_PERIOD;
 	connect(&timer, SIGNAL(timeout()), this, SLOT(compute()));
 

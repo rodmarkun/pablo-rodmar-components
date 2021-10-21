@@ -8,5 +8,6 @@ Component obstacle_avoiding
         requires DifferentialRobot, Laser;
     };
     language Cpp;
+    gui Qt(QWidget);
 };
 

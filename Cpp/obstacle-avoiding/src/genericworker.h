@@ -22,6 +22,13 @@
 #include "config.h"
 #include <stdint.h>
 #include <qlog/qlog.h>
+
+#if Qt5_FOUND
+	#include <QtWidgets>
+#else
+	#include <QtGui>
+#endif
+#include <ui_mainUI.h>
 #include <CommonBehavior.h>
 
 #include <DifferentialRobot.h>
@@ -36,7 +43,7 @@
 typedef map <string,::IceProxy::Ice::Object*> MapPrx;
 
 
-class GenericWorker : public QObject
+class GenericWorker : public QWidget, public Ui_guiDlg
 {
 Q_OBJECT
 public:
