@@ -66,16 +66,14 @@ void SpecificWorker::initialize(int period)
 }
 
 void SpecificWorker::compute() {
-    const float threshold = 600;
-    float rot = 0.8;
-    float limit;
-
     try
     {
         RoboCompGenericBase::TBaseState bState;
         differentialrobot_proxy->getBaseState(bState);
         robot_polygon->setRotation(bState.alpha * 180 / M_PI);
         robot_polygon->setPos(bState.x, bState.z);
+        std::cout << "X: " << (bState.x) << "Z: " << (bState.z) << std::endl;
+        
     }
     catch (const Ice::Exception &ex) { std::cout << ex << std::endl; }
 
@@ -87,13 +85,43 @@ void SpecificWorker::compute() {
 
     if(target.active)
     {
-        // convertir el punto al sistema de referencia del robot -> pr
         // beta = atan2(pr.y, pr.x)
         // distacia al targe: módulo de pr
-
+        // convertir el punto al sistema de referencia del robot -> pr
         // if dist < 100  entonces adv = 0 beta = 0  AND target.active false; return
-
         // differential_robot->setSpeedBase(adv, beta);
+
+        RoboCompGenericBase::TBaseState bState;
+        differentialrobot_proxy->getBaseState(bState);
+        std::cout << "Detectada entrada por ratón" << std::endl;
+
+        double anguloRad, anguloAGirar, rx, rz;
+        int toleranciaRad = 0.25, velocidad = 300, distanciaTarget;
+
+        rx = target.pos.rx() - (bState.x);
+        rz = target.pos.ry() - (bState.z);
+
+        anguloRad = atan2(rx, rz);
+        std::cout << "AnguloRad: " << anguloRad << " AnguloGrad: "<< anguloRad * 180 / M_PI << " AnguloRobot: " << bState.alpha << " AnguloRobotGrado: " << bState.alpha * 180 / M_PI << std::endl;
+        anguloAGirar = anguloRad + bState.alpha;
+
+        if(anguloAGirar > M_PI){
+            anguloAGirar = -(M_PI*2 - anguloAGirar);
+        }
+
+        distanciaTarget = sqrt(rx*rx + rz*rz);
+        if(anguloAGirar > toleranciaRad || anguloAGirar < -toleranciaRad)
+        {
+            differentialrobot_proxy->setSpeedBase(10, anguloAGirar);
+            usleep(1000000);
+            differentialrobot_proxy->setSpeedBase(velocidad, 0);
+            usleep(distanciaTarget/velocidad*1000000);
+            differentialrobot_proxy->setSpeedBase(0, 0);
+            usleep(2000000);
+            std::cout << bState.alpha << std::endl;
+        }
+
+        target.active = false;
     }
 }
 
