@@ -29,7 +29,7 @@
 
 #include <genericworker.h>
 #include <abstract_graphic_viewer/abstract_graphic_viewer.h>
-
+#include <Eigen/Dense>
 
 class SpecificWorker : public GenericWorker
 {
@@ -53,7 +53,7 @@ private:
     const int ROBOT_LENGTH = 400;
     QGraphicsPolygonItem *robot_polygon;
     QGraphicsRectItem *laser_in_robot_polygon;
-    void draw_laser(const RoboCompLaser::TLaserData &ldata);
+    const float MAX_ADV_SPEED = 1000;
 
     // target
     struct Target
@@ -63,7 +63,12 @@ private:
     };
     Target target;
 
+    Eigen::Vector2f world_to_robot(const Eigen::Vector2f &robot, float ra, const Eigen::Vector2f &target);
+    void draw_laser(const RoboCompLaser::TLaserData &ldata, Eigen::Vector2f robot, float ra);
+    float break_rotation(float beta);
+    float break_target(float dist);
 
+    Eigen::Vector2f robot_to_world(const Eigen::Vector2f &robot, float ra, const Eigen::Vector2f &x);
 };
 
 #endif

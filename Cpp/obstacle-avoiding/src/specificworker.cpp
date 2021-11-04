@@ -55,77 +55,108 @@ void SpecificWorker::initialize(int period)
 
 	this->Period = 100;
 	if(this->startup_check_flag)
-	{
 		this->startup_check();
-	}
 	else
-	{
 		timer.start(Period);
-	}
-
 }
 
-void SpecificWorker::compute() {
+void SpecificWorker::compute()
+{
+    RoboCompGenericBase::TBaseState bState;
     try
     {
-        RoboCompGenericBase::TBaseState bState;
         differentialrobot_proxy->getBaseState(bState);
         robot_polygon->setRotation(bState.alpha * 180 / M_PI);
         robot_polygon->setPos(bState.x, bState.z);
-        
+
     }
     catch (const Ice::Exception &ex) { std::cout << ex << std::endl; }
-
     try
     {
-          RoboCompLaser::TLaserData ldata = laser_proxy->getLaserData();
+        RoboCompLaser::TLaserData ldata = laser_proxy->getLaserData();
+        draw_laser(ldata, Eigen::Vector2f(bState.x, bState.z), bState.alpha);
     }
     catch (const Ice::Exception &ex) { std::cout << ex << std::endl; }
 
-    if(target.active)
+    if (target.active)
     {
-        // beta = atan2(pr.y, pr.x)
-        // distacia al targe: módulo de pr
+        float adv, rot;
         // convertir el punto al sistema de referencia del robot -> pr
-        // if dist < 100  entonces adv = 0 beta = 0  AND target.active false; return
-        // differential_robot->setSpeedBase(adv, beta);
+        Eigen::Vector2f pr = world_to_robot(Eigen::Vector2f(bState.x, bState.z), bState.alpha,
+                                            Eigen::Vector2f(target.pos.x(), target.pos.y()));
+        // convertir al SR del robot
+        float beta = atan2(pr.x(), pr.y());
+        // distacia al targe: módulo de pr
+        float dist = pr.norm();
 
-        RoboCompGenericBase::TBaseState bState;
-        differentialrobot_proxy->getBaseState(bState);
-        std::cout << "Detectada entrada por ratón" << std::endl;
-
-        double anguloRad, anguloAGirar, rx, rz;
-        int velocidad = 300, distanciaTarget;
-
-        rx = target.pos.rx() - (bState.x);
-        rz = target.pos.ry() - (bState.z);
-
-        anguloRad = atan2(rx, rz);
-        std::cout << "AnguloRad: " << anguloRad << " AnguloGrad: "<< anguloRad * 180 / M_PI << " AnguloRobot: " << bState.alpha << " AnguloRobotGrado: " << bState.alpha * 180 / M_PI << std::endl;
-        anguloAGirar = anguloRad + bState.alpha;
-
-        distanciaTarget = sqrt(rx*rx + rz*rz);
-
-        if(anguloAGirar > M_PI || anguloAGirar < -(M_PI)){
-            anguloAGirar = -(M_PI*2 - anguloAGirar);
+        if (dist < 100)
+        {
+            adv = 0;
+            rot = 0;
+            target.active = false;
+        } else // mormal
+        {
+            // comprobar distancias laterales
+            // si es menor que un umbral, generar un delta sobre beta
+            rot = beta;
+            adv = MAX_ADV_SPEED * break_rotation(beta) * break_target(dist);
         }
-        std::cout << "Angulo a girar: " << anguloAGirar << endl;
-
-        differentialrobot_proxy->setSpeedBase(10, anguloAGirar);
-        usleep(1000000);
-        differentialrobot_proxy->setSpeedBase(velocidad, 0);
-        usleep(distanciaTarget/velocidad*1000000);
-        differentialrobot_proxy->setSpeedBase(0, 0);
-        usleep(1000000);
-
-        target.active = false;
+        try { differentialrobot_proxy->setSpeedBase(adv, rot); }
+        catch (const Ice::Exception &e) { std::cout << e.what() << std::endl; }
     }
 }
-
 /////////////////////////////////////////////////////////////////////////
+float SpecificWorker::min_dist_laser_segement(const RoboCompLaser::TLaserData &ldata, int a, int b)
+{
+    // comprobar que A y B
+    auto min = std::min_element(ldata.begin()+a, ldata.begin()+b, [](auto a, auto b){return a.dist < b.dist;});
+    return (*min).dist;
+}
+float SpecificWorker::break_rotation(float beta)
+{
+    return exp(-beta*beta);
+}
+float SpecificWorker::break_target(float dist)
+{
+    if(dist > 1000)
+        return 1;
+    else
+        return (1/1000.f)*dist;
+}
+Eigen::Vector2f SpecificWorker::world_to_robot(const Eigen::Vector2f &robot, float ra, const Eigen::Vector2f &target)
+{
+    Eigen::Matrix2f rot;
+    rot << cos(ra), -sin(ra), sin(ra), cos(ra);
+    return rot.transpose() * (target - robot);
+}
+Eigen::Vector2f SpecificWorker::robot_to_world(const Eigen::Vector2f &robot, float ra, const Eigen::Vector2f &x)
+{
+    Eigen::Matrix2f rot;
+    rot << cos(ra), -sin(ra), sin(ra), cos(ra);
+    return rot * x + robot;
+}
+void SpecificWorker::draw_laser(const RoboCompLaser::TLaserData &ldata, Eigen::Vector2f robot, float ra)
+{
+    // borrar el laser antiguo
+    static QGraphicsItem *polygon;
+    if(polygon != nullptr)
+        viewer->scene.removeItem(polygon);
 
-
-
+    // pintar el actual
+    QPolygonF poly;
+    auto origen = robot_to_world(robot, ra, Eigen::Vector2f(0,0));
+    poly << QPointF(origen.x(), origen.y());
+    for(const auto &l : ldata)
+    {
+        auto lw = robot_to_world(robot, ra, Eigen::Vector2f(l.dist * sin(l.angle), l.dist * cos(l.angle)));
+        poly << QPointF(lw.x(), lw.y());
+    }
+    QColor color("LightGreen");
+    color.setAlpha(40);
+    polygon = viewer->scene.addPolygon(poly, QPen(color),QBrush(color));
+    polygon->setZValue(3);
+}
+/////////////////////////////////////////////////////////////////////////
 int SpecificWorker::startup_check()
 {
 	std::cout << "Startup check" << std::endl;
@@ -139,8 +170,6 @@ void SpecificWorker::new_target_slot(QPointF p)
     target.pos = p;
     target.active = true;
 }
-
-
 
 
 /**************************************/
