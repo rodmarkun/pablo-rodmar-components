@@ -69,6 +69,8 @@ private:
     float break_target(float dist);
 
     Eigen::Vector2f robot_to_world(const Eigen::Vector2f &robot, float ra, const Eigen::Vector2f &x);
+
+    std::tuple<float, float>  min_dist_laser_segement(const RoboCompLaser::TLaserData &ldata, int a, int b);
 };
 
 #endif

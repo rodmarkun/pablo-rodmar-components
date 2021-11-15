@@ -63,6 +63,7 @@ void SpecificWorker::initialize(int period)
 void SpecificWorker::compute()
 {
     RoboCompGenericBase::TBaseState bState;
+    RoboCompLaser::TLaserData ldata;
     try
     {
         differentialrobot_proxy->getBaseState(bState);
@@ -73,7 +74,7 @@ void SpecificWorker::compute()
     catch (const Ice::Exception &ex) { std::cout << ex << std::endl; }
     try
     {
-        RoboCompLaser::TLaserData ldata = laser_proxy->getLaserData();
+        ldata = laser_proxy->getLaserData();
         draw_laser(ldata, Eigen::Vector2f(bState.x, bState.z), bState.alpha);
     }
     catch (const Ice::Exception &ex) { std::cout << ex << std::endl; }
@@ -94,23 +95,38 @@ void SpecificWorker::compute()
             adv = 0;
             rot = 0;
             target.active = false;
-        } else // mormal
+        }
+        else // mormal
         {
             // comprobar distancias laterales
             // si es menor que un umbral, generar un delta sobre beta
             rot = beta;
             adv = MAX_ADV_SPEED * break_rotation(beta) * break_target(dist);
+
+            auto [dist, angle] = min_dist_laser_segement(ldata, ldata.size()/3.0, 2*ldata.size()/3.0);
+            //qInfo() << dist << angle;
+            if(dist<560)
+            {
+                adv = 0;
+                if (angle >= 0)
+                    rot = rot + (35.0/dist);
+                else
+                    rot = rot - (35.0/dist);
+            }
+            qInfo() << dist << angle << (30.0/dist);
+
         }
         try { differentialrobot_proxy->setSpeedBase(adv, rot); }
         catch (const Ice::Exception &e) { std::cout << e.what() << std::endl; }
     }
 }
 /////////////////////////////////////////////////////////////////////////
-float SpecificWorker::min_dist_laser_segement(const RoboCompLaser::TLaserData &ldata, int a, int b)
+
+std::tuple<float, float> SpecificWorker::min_dist_laser_segement(const RoboCompLaser::TLaserData &ldata, int a, int b)
 {
     // comprobar que A y B
     auto min = std::min_element(ldata.begin()+a, ldata.begin()+b, [](auto a, auto b){return a.dist < b.dist;});
-    return (*min).dist;
+    return std::make_tuple((*min).dist, (*min).angle);
 }
 float SpecificWorker::break_rotation(float beta)
 {
